@@ -1,0 +1,101 @@
+% "Charybdis"
+% RT-Alignment of P600
+% Jona Sassenhagen
+% jona.sassenhagen@staff.uni-marburg.de
+
+% Butterfly ERP - Script Charybdis
+% This script plots Butterfly ERPs and scalp topos. Take a look at the ERPimage script for the meanings of the variable.
+% You will probably need to modify all file locations
+
+eeglab;
+
+%set variables
+ALLEEG=[];EEG=[];allerp=[];allerp2=[];allerp3=[];
+control={'S 41', 'S 42', 'S 51', 'S 52'}
+syn = {'S 71' 'S 80'}
+sem = {'S 60' 'S 61'}
+
+% initiate main loop across subjects
+for S = 1:20
+	setname = [num2str((S),'%02i'),'_char_long.set'];
+
+% load data
+	EEG = pop_loadset('filename',setname,'filepath','/home/jona/Desktop/charybdis/neufilt/');
+
+% epoch around syntactic violation trials
+EEG = pop_epoch( EEG, syn, [-1.5 2.5], 'epochinfo', 'yes');
+
+% remove artifact ICs
+% comment out if you do not have IC clusters for eye artefacts
+EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+% EEG = pop_reref( EEG, [31 33] );
+
+% loop to collect data
+
+% initiate sub loop for electrodes 1:26 (excluding eye and mastoid electrodes)
+% you could also plot all 33 electrodes if you like looking at eye electrodes and mastoids
+for elec = 1:26
+
+ % collect data for electrode 1
+	outdata = squeeze(EEG.data(elec,:,:));
+ % mean
+	allerp(elec,:,S) = mean(outdata,2);
+
+% terminate loop
+end;
+
+% repeat for control trials
+EEG = pop_loadset('filename',setname,'filepath','/home/jona/Desktop/charybdis/neufilt/');
+EEG = pop_epoch( EEG, control, [-1.5 2.5], 'epochinfo', 'yes');
+EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+% EEG = pop_reref( EEG, [31 33] );
+
+for elec = 1:26
+	outdata = squeeze(EEG.data(elec,:,:));allerp2(elec,:,S) = mean(outdata,2);
+end;
+
+%repeat for semantic trials
+EEG = pop_loadset('filename',setname,'filepath','/home/jona/Desktop/charybdis/neufilt/');
+EEG = pop_epoch( EEG, sem, [-1.5 2.5], 'epochinfo', 'yes');
+%[EEG, com, b] = pop_eegfiltnew(EEG, 0, 10);
+
+EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+% EEG = pop_reref( EEG, [31 33] );
+
+
+for elec = 1:26
+	outdata = squeeze(EEG.data(elec,:,:));	allerp3(elec,:,S) = mean(outdata,2);
+end;
+
+
+end;
+
+
+% calculate ERPs by averaging across subjects
+% difference syntax minus control
+data = mean(allerp,3)-mean(allerp2,3);
+% difference semantic minus control
+semdata = mean(allerp3,3)-mean(allerp2,3);
+
+% plot difference ERP butterfly plots for electrodes 1:26, for the whole epoch (-1.5 to 2.5 s), and show scalp map at 450 and 900 ms
+
+% syntax
+figure;timtopo( data, EEG.chanlocs(1:26), [-1500 2500 -7.5 15],[450 900 ], '', 0, 0, 'chaninfo', EEG.chaninfo,'style','map','title','Butterfly ERP Syntactic Violation minus Control','shading','interp');
+figure;timtopo( data, EEG.chanlocs(1:26), [-1500 2500 -7.5 15],[900 ], '', 0, 0, 'chaninfo', EEG.chaninfo,'style','map','title','Butterfly ERP Syntactic Violation minus Control','shading','interp');
+
+
+% semantics
+figure;timtopo( semdata, EEG.chanlocs(1:26), [-1500 2500 -7.5 15],[450 900], '', 0, 0, 'chaninfo', EEG.chaninfo,'style','map','title','Butterfly ERP Semantic Violation minus Control','shading','interp')
+
+
+% use this if you want to look at the scalp distribution for a time window mean. I forgot where I found this, probably on the EEGLAB list, but it's not mine
+%ChildH=get(gcf,'Children');
+%axes(ChildH(3));
+%topoplot(mean(data(:,[400:500]),2),EEG.chanlocs(1:26));
+

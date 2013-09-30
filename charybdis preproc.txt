@@ -1,0 +1,69 @@
+% "Charybdis"
+% RT-Alignment of P600
+% Jona Sassenhagen
+% jona.sassenhagen@staff.uni-marburg.de
+
+% Preprocessing - Script Charybdis
+% This script takes the raw Brainvision files as input and returns filtered, downsampled files that contain ICA decompositions plus IC dipoles, electrode locations, epoched around correct responses
+% You will probably need to modify all file locations
+
+eeglab;
+
+% subject list
+subjects = {'01' '02' '03' '04' '05' '06' '07' '08' '09' '10' '11' '12' '13' '14' '15' '16' '17' '18' '19'  '20' };
+
+
+% enter main loop
+for subject = 1:length(subjects)
+
+ % set variables
+ % set # of current subj
+	subj = subjects{subject};
+ % set filename of output file
+	ica = [subj,'_char_long.set'];
+ % set filename for raw input file; point to appropriate location of raw files
+	sourcefile = ['~/Desktop/charybdis/raw/ch',subj,'.vhdr']
+
+ % clear memory
+	STUDY = []; CURRENTSTUDY = 0; ALLEEG = []; EEG=[]; CURRENTSET=[];
+
+ % load input file using fileio
+	EEG = pop_fileio(sourcefile);
+
+ % downsample to 250 hz to save space and time (we are not interested in high frequencies anyways)
+	EEG = pop_resample( EEG, 250)
+
+ % filter between 0.5 and 40 hz to remove high-frequency noise and make the data more stationary (speeds up all plotting, processing and ICA)
+	[EEG, com, b] = pop_eegfiltnew(EEG, 0.5, 40);
+
+ % set appropriate channel locations
+ % set eye chan locs; should be taken with a grain of salt
+	EEG=pop_chanedit(EEG, 'changefield',{27 'labels' 'LO1'},'changefield',{28 'labels' 'LO2'},'changefield',{32 'labels' 'IO1'},'changefield',{30 'labels' 'IO2'},'lookup','~/eeglab/plugins/dipfit2.2/standard_BESA/standard-10-5-cap385.elp');
+
+ % append reference channel, and reference to average reference while reconstructing the old reference (A2)
+	EEG=pop_chanedit(EEG, 'append',32,'changefield',{33 'labels' 'A2'},'changefield',{31 'labels' 'A1'},'changefield',{29 'labels' 'AFz'},'lookup','~/eeglab/plugins/dipfit2.2/standard_BESA/standard-10-5-cap385.elp','setref',{'1:32' 'A2'});
+	EEG = pop_reref( EEG, [],'refloc',struct('labels',{'A2'},'type',{''},'theta',{90},'radius',{0.75},'X',{3.6803e-15},'Y',{-60.1041},'Z',{-60.1041},'sph_theta',{-90},'sph_phi',{-45},'sph_radius',{85},'urchan',{33},'ref',{''},'datachan',{0}));
+
+ % epoch EEG from 4 seconds before to 2 seconds after correct responses (trigger S196)
+	EEG = pop_epoch( EEG, {'S196'}, [-4 2], 'epochinfo', 'yes');
+
+ % reject unlikely data for all channels; epochs with a kurtosis 5+ stds away from mean were automatically rejected
+	[EEG, locthresh, globthresh, nrej] = pop_rejkurt(EEG, 1, [1:EEG.nbchan], 5, 5, 1, 1, 0);
+
+ % run standard extended infomax ICA (for eye correction; you can comment out this line to save a lot of time and space if you do not care about eye correction, which isn't really necessary anyways if all you care about is PZ!
+ % note that ICA does not seem to care that the data is not truly rank 33 (since chan 33, the old reference channel, was redundant) for some reason! It would be more appropriate to only decompose the data into 32 components, but this seems impossible without distorting the data using PCA
+	EEG = pop_runica(EEG, 'extended',1,'interupt','off');
+
+ % set badcomps, saccade and blink fields for CORRMAP eye correction plugin and update subject, session and condition fields for .study
+	EEG.badcomps = [];EEG.clusters.saccade=[];EEG.clusters.blink=[];
+	EEG = pop_editset(EEG, 'subject', subj, 'condition', 'rt', 'session', [1]); 
+
+ % save data; point to appropriate locations for preprocessed files
+	EEG = pop_saveset( EEG, 'filename',ica,'filepath','~/Desktop/charybdis');
+
+% terminate loop
+end;
+
+
+
+

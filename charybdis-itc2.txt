@@ -1,0 +1,215 @@
+ALLEEG=[];EEG=[];alldat=[];allrtvar=[];rts=[];dats=[];allrtvar2=[];alldat2=[];tics=[];
+
+control={'S 41', 'S 42', 'S 51', 'S 52'}
+syn = {'S 71' 'S 80'}
+sem = {'S 60' 'S 61'}
+buttonpress = {'S196'}
+
+channel = 23
+
+for S = 1:20
+
+
+
+		filename = [num2str((S),'%02i'),'_char_long.set'];
+      	  filepath = '/home/jona/Desktop/charybdis/neufilt/'	
+        
+
+EEG = pop_loadset('filename',filename,'filepath',filepath);
+%EEG = pop_resample( EEG, 100);
+EEG = pop_subcomp( EEG,[EEG.clusters.blink EEG.clusters.saccade], 0);EEG.icasphere = []; EEG.icaweights = []; EEG.icawinv = [];
+	EEG = pop_reref( EEG, [31 33] );
+
+EEG = pop_epoch( EEG, control, [-4 5], 'epochinfo', 'yes');
+%EEG = pop_rmbase( EEG, []);
+
+dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+controlerp=mean(dat,2);
+
+
+
+EEG = pop_loadset('filename',filename,'filepath',filepath);
+%EEG = pop_resample( EEG, 100);
+EEG = pop_subcomp( EEG,[EEG.clusters.blink EEG.clusters.saccade], 0);EEG.icasphere = []; EEG.icaweights = []; EEG.icawinv = [];
+	EEG = pop_reref( EEG, [31 33] );
+
+EEG = pop_epoch( EEG, buttonpress, [-9 10], 'epochinfo', 'yes');
+EEG = pop_epoch( EEG, syn, [-4 5], 'epochinfo', 'yes');
+%EEG = pop_rmbase( EEG, []);
+
+dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+rtvar = eeg_getepochevent( EEG,buttonpress,[],'latency');
+
+
+for ii=1:length(dat(1,:))
+ dat(:,ii)=dat(:,ii)-controlerp;
+end
+
+allrtvar = [rtvar,allrtvar];
+alldat=[dat,alldat];
+datas{S} = dat;
+rts{S} = rtvar;
+
+end;
+
+
+
+%figure;
+%sbplot(2,1,1)
+% erpimage(alldat, allrtvar, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 30, 1 ,'erp',1,'avg_type','Gaussian','cbar','on','cbar_title','\muV');
+
+%sbplot(2,1,2)
+%erpimage(alldat, allrtvar, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 30, 1 ,'erp',1,'avg_type','Gaussian','cbar','on','cbar_title','\muV','align',inf);
+
+
+for X = 1:20
+
+[outdata5,outrtvar5,outtrials5,limits,axhndls,erp,amps,cohers,cohsig,ampsig,outamps,phsangls,phsamp,sortidx,erpsig] = erpimage(datas{X}, rts{X}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 1, 1 ,'erp',1,'cbar','on','cbar_title','\muV','NoShow','on');
+
+[Y(X),I(X)]=max(erp(1:525));
+
+[outdata6,outrtvar6,outtrials6] = erpimage(datas{X}, rts{X}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 1, 1 ,'erp',1,'cbar','on','cbar_title','\muV','NoShow','on','align',inf);
+
+X
+[ersp,itc,powbase,times,freqs,erspboot,itcboot,itcphase]  = newtimef( {outdata6 outdata5}  ,EEG.pnts,[EEG.xmin EEG.xmax]*1000,EEG.srate,[2 0.5], 'freqs', [0.5 8], 'plotphase', 'off', 'plotersp','off', 'plotitc','off','trialbase','full','timesout',1000,'nfreqs',30,'verbose','on','freqscale', 'linear','verbose','off'); 
+
+itcs1{X} = itc{1};itcs2{X} = itc{2};itcs{X} = itc{3};ersps{X} = ersp{3};tics(:,:,X) = itcs{X};tics1(:,:,X) = itcs1{X};tics2(:,:,X) = itcs2{X};
+
+
+X
+end;
+
+
+
+
+
+
+[outdata,outrtvar,outtrials,limits,axhndls,erp,amps,cohers,cohsig,ampsig,outamps,phsangls,phsamp,sortidx,erpsig] = erpimage(alldat,allrtvar, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 1, 1 ,'erp',1,'cbar','on','cbar_title','\muV','NoShow','on');
+
+[Ys,maxp6]=max(erp((times(1)-EEG.times(1))/10:525));
+I = maxp6;
+S = 3
+
+for X = 1:20
+a(X) = mean(mean(tics(:,I-S:I+S,X),1),2);
+end;
+stats = mes(a.',0,{'md','hedgesg'},'nBoot',10000);
+[BF01, probH0] = bayesTtestOneSample(a)
+
+
+
+
+for X = 1:20
+rtallss(X) = nanmean(rts{X});
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+figure; 
+for X = 1:20;
+sbplot(4,5,X);
+tftopo(itcs{X},times,freqs,'limits', [nan nan nan nan nan nan], 'smooth',2,'logfreq','off','vert',[ 0 940],'title',num2str(X));
+end;
+
+figure; 
+for X = 1:20;
+sbplot(4,5,X);
+tftopo(itcs1{X},times,freqs,'limits', [nan nan nan nan nan nan], 'smooth',2,'logfreq','off','vert',[ 0 940],'title',num2str(X));
+end;
+
+figure; 
+for X = 1:20;
+sbplot(4,5,X);
+tftopo(itcs2{X},times,freqs,'limits', [nan nan nan nan nan nan], 'smooth',2,'logfreq','off','vert',[ 0 940],'title',num2str(X));
+end;
+
+
+
+
+
+%figure; 
+for X = 1:20
+%sbplot(4,5,X)
+%plotcurve(times,itcs{X}(3:6,:),'plotmean','on','vert',[times([265])]);
+%plotcurve(times,itcs{X}(4:6,:),'plotmean','on','vert',[700]);
+%plotcurve(times,itcs{X}(:,:),'plotmean','on','vert',[940]);
+
+end;
+
+
+
+clear out3;
+for X = 1:20
+out3(X) = mean(mean(tics(:,245:250,X),1),2);
+[BF01, probH0] = bayesTtestOneSample(out3);
+bfactor(X) = 1/BF01;
+[H,P,CI,STATS] = ttest(out3);
+tstats(X) = STATS.tstat;
+pvalues(X) = P;
+end;
+
+plot(tstats)
+
+plot(bfactor);
+xlabel('# of participants')
+ylabel('bayes factor in favour of the alternative hypothesis')
+
+
+
+%figure; 
+for X = 1:20
+tics(:,:,X) = itcs{X};
+end;
+
+%figure;tftopo(tics,times,freqs,'limits', [nan nan nan nan nan nan], 'smooth',2,'logfreq','native','mode','ave','vert',[0 943]);
+
+
+for X = 1:20
+out(X) = mean(mean(tics(:,245:250,X),1),2);
+out2(X) = mean(mean(tics(3:6,245:250,X),1),2);
+
+
+end;
+
+[BF01, probH0] = bayesTtestOneSample(out)
+
+
+[BF01, probH0] = bayesTtestOneSample(out2)
+
+
+
+for X = 1:20
+
+[outdata5,outrtvar5,outtrials5] = erpimage(datas{X}, rts{X}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 1, 1 ,'erp',1,'cbar','on','cbar_title','\muV','NoShow','on');
+
+[outdata6,outrtvar6,outtrials6] = erpimage(datas{X}, rts{X}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 1, 1 ,'erp',1,'cbar','on','cbar_title','\muV','NoShow','on','align',inf);
+
+X
+[ersp,itc,powbase,times,freqs,erspboot,itcboot,itcphase]  = newtimef( outdata5  ,EEG.pnts,[EEG.xmin EEG.xmax]*1000,EEG.srate,[2 0.5], 'freqs', [0.5 8], 'plotphase', 'off', 'plotersp','off', 'plotitc','off','trialbase','full','timesout',1000,'nfreqs',30,'verbose','on','freqscale', 'linear','verbose','off'); 
+
+tics1(:,:,X) = itc;
+
+[ersp,itc,powbase,times,freqs,erspboot,itcboot,itcphase]  = newtimef( outdata6  ,EEG.pnts,[EEG.xmin EEG.xmax]*1000,EEG.srate,[2 0.5], 'freqs', [0.5 8], 'plotphase', 'off', 'plotersp','off', 'plotitc','off','trialbase','full','timesout',1000,'nfreqs',30,'verbose','on','freqscale', 'linear','verbose','off'); 
+
+tics2(:,:,X) = itc;
+
+X
+end;
+
+
+
+% Mean ITC was higher in response-than in onset-locked data (t(19) = 5, p < 0.0001, 95% CI = 0.036, 0.078).

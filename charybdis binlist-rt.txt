@@ -1,0 +1,11 @@
+bin1 
+syntactic violations
+.{80;71}{t<1-2500>196}
+
+bin2
+semantic violations
+.{60;61}{t<1-2500>196}
+
+bin3
+control
+.{41;42;51;52}{t<1-2500>196}

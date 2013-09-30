@@ -1,0 +1,96 @@
+eeglab;
+
+subjects = {'01' '02' '03' '04' '05' '06' '07' '08' '09' '10' '11' '12' '13' '14' '15' '16' '17' '18' '19'  '20' };
+
+% initiate main loop
+for subject = 1:length(subjects)
+
+% set variables
+
+% set current subj number
+	subj = subjects{subject};
+
+% set file to steal ICA from (output of preproc script)
+	ica = [subj,'_char_long.set'];
+
+% target .erp file
+	erpname = ['~/Desktop/charybdis/erplab/',subj,'.erp']
+
+% raw file input
+	sourcefile = ['~/Desktop/charybdis/raw/ch',subj,'.vhdr']
+
+%clear memory
+STUDY = []; CURRENTSTUDY = 0; ALLEEG = []; EEG=[]; CURRENTSET=[];
+
+% load preproc'd file to steal ICA
+EEG = pop_loadset(  'filename',ica,'filepath','~/Desktop/charybdis/');
+
+% save ICA structure into temporal variable (I stole this part from a script by Stefan Debener)
+TMP.icawinv = EEG.icawinv;
+TMP.icasphere = EEG.icasphere;
+TMP.icaweights = EEG.icaweights;
+TMP.icachansind = EEG.icachansind;
+TMP.dipfit = EEG.dipfit;
+TMP.reject.gcompreject = EEG.reject.gcompreject;
+
+% import raw file again, filter, resample, give coordinates and average reference like in main preproc
+EEG = pop_fileio(sourcefile);
+[EEG, com, b] = pop_eegfiltnew(EEG, 0.1, 40);
+EEG = pop_resample( EEG, 250);
+EEG=pop_chanedit(EEG, 'changefield',{27 'labels' 'LO1'},'changefield',{28 'labels' 'LO2'},'changefield',{32 'labels' 'IO1'},'changefield',{30 'labels' 'IO2'},'lookup','~/eeglab/plugins/dipfit2.2/standard_BESA/standard-10-5-cap385.elp');
+EEG=pop_chanedit(EEG, 'append',32,'changefield',{33 'labels' 'A2'},'changefield',{31 'labels' 'A1'},'changefield',{29 'labels' 'AFz'},'lookup','~/eeglab/plugins/dipfit2.2/standard_BESA/standard-10-5-cap385.elp','setref',{'1:32' 'A2'});
+EEG = pop_reref( EEG, [],'refloc',struct('labels',{'A2'},'type',{''},'theta',{90},'radius',{0.75},'X',{3.6803e-15},'Y',{-60.1041},'Z',{-60.1041},'sph_theta',{-90},'sph_phi',{-45},'sph_radius',{85},'urchan',{33},'ref',{''},'datachan',{0}));
+
+% add ICA structure
+EEG.icawinv = TMP.icawinv;
+EEG.icasphere = TMP.icasphere;
+EEG.icaweights = TMP.icaweights;
+EEG.icachansind = TMP.icachansind;
+EEG.dipfit = TMP.dipfit;
+EEG.reject.gcompreject = TMP.reject.gcompreject;
+
+% remove rejected components (see make study script)
+EEG=pop_subcomp(EEG,find(EEG.reject.gcompreject),0);
+
+% empty ICA structure
+EEG.icawinv = [];
+EEG.icasphere = [];
+EEG.icaweights = [];
+EEG.icachansind = [];
+EEG.dipfit = [];
+EEG.reject.gcompreject = [];
+
+% ERPLAB standard preproc
+EEG  = pop_creabasiceventlist( EEG , 'AlphanumericCleaning', 'on', 'Eventlist', '~/Desktop/charybdis/erplab/out.txt', 'Newboundary', { -999 }, 'Stringboundary', { 'boundary' } );
+[ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 1,'overwrite','on','gui','off'); 
+
+% read in bin list and create bin structure
+% the bin file tells the script to create 3 bins, containing trials after syntactic, semantic and control noun onsets, if they are followed by a correct response within 2.5 s
+% make sure binlist-rt is in the right place!
+EEG  = pop_binlister( EEG , 'BDF', '~/Desktop/charybdis/erplab/binlist-rt.txt', 'ExportEL', '~/Desktop/charybdis/erplab/out.txt', 'ImportEL', 'no',  'SendEL2', 'EEG&Text' );
+[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+
+% epoch bins
+EEG = pop_epochbin( EEG , [-250.0  2000.0],  'pre');
+[ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 1,'overwrite','on','gui','off'); 
+
+% rouch artefact correction to remove any extreme outliers at 23 (I think this is only here because I forgot to remove it? It shouldn't really remove any trials)
+EEG  = pop_artextval( EEG , 'Channel',  23, 'Flag',  1, 'Review', 'off', 'Threshold', [ -250 250], 'Twindow', [ -250 2000] );
+
+% create ERP files and save
+[ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 1,'overwrite','on','gui','off'); 
+ERP = pop_averager( EEG , 'Criterion', 'good', 'DSindex',1, 'Stdev', 'on', 'Warning', 'on' );
+ERP = pop_savemyerp(ERP, 'erpname', subj, 'filename', erpname);
+
+end;
+
+
+%%% the following should load all subjects into ERPLAB and create a grand average file, however, for some reason sometimes it doesn't? In that case, just do it by hand
+
+ALLERP = pop_deleterpset( ALLERP, [1:length(ALLERP)]);                                                                                                                                                                                                                             
+
+ERP = pop_loaderp( 'filename', {'01.erp', '02.erp', '03.erp', '04.erp', '05.erp', '06.erp', '07.erp', '08.erp', '09.erp', '10.erp', '11.erp', '12.erp', '13.erp', '14.erp' '15.erp' '16.erp' '17.erp' '18.erp' '19.erp' '20.erp'}, 'filepath', '~/Desktop/charybdis/erplab/', 'Multiload', 'off', 'overwrite', 'off', 'Warning', 'on' );
+ERP = pop_gaverager( ALLERP , 'ERPindex',1:20, 'Stdev', 'on', 'Warning', 'on', 'Weighted', 'on' );
+ERP = pop_savemyerp(ERP, 'erpname', 'char-avg', 'filename', 'char-avg.erp', 'filepath', '~/Desktop/charybdis/erplab/', 'warning', 'on');
+
+% now, open the ERPLAB GUI and load the grand average file, and plot the grand averages for conditions 1:3.

@@ -1,0 +1,335 @@
+ALLEEG=[];EEG=[];alldat=[];allrtvar=[];rts=[];dats=[];allrtvar2=[];alldat2=[];
+
+control={'S 41', 'S 42', 'S 51', 'S 52'}
+syn = {'S 71' 'S 80' }
+sem = {'S 60' 'S 61'}
+nsub = 20
+
+channel = 23
+
+for S = 1:nsub
+
+	filename = [num2str((S),'%02i'),'_char_long.set'];
+	filepath = '/home/jona/Desktop/charybdis/neufilt/'	
+		
+
+	EEG = pop_loadset('filename',filename,'filepath',filepath);
+	%EEG = pop_resample( EEG, 100);
+	EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+	EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+	EEG = pop_reref( EEG, [31 33] );
+%	EEG = pop_eegfiltnew(EEG, 0.5, 0);
+
+	EEG = pop_epoch( EEG, control, [-1 3], 'epochinfo', 'yes');
+	EEG = pop_rmbase( EEG, []);
+
+	dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+	controlerp=mean(dat,2);
+
+
+
+
+	EEG = pop_loadset('filename',filename,'filepath',filepath);
+	%EEG = pop_resample( EEG, 100);
+	EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+	EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+	EEG = pop_reref( EEG, [31 33] );
+%	EEG = pop_eegfiltnew(EEG, 0.5, 0);
+
+	EEG = pop_epoch( EEG, syn, [-1 3], 'epochinfo', 'yes');
+	EEG = pop_rmbase( EEG, []);
+
+	dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+	rtvar = eeg_getepochevent( EEG,{'S196'},[],'latency');
+
+
+	for ii=1:length(dat(1,:))
+	 dat(:,ii)=dat(:,ii)-controlerp;
+	end
+
+	allrtvar = [rtvar,allrtvar];
+	alldat=[dat,alldat];
+
+	EEG = pop_loadset('filename',filename,'filepath',filepath);
+	%EEG = pop_resample( EEG, 100);
+	EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+	EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+	EEG = pop_reref( EEG, [31 33] );
+%	EEG = pop_eegfiltnew(EEG, 0.5, 0);
+
+	EEG = pop_epoch( EEG, sem, [-1 3], 'epochinfo', 'yes');
+	EEG = pop_rmbase( EEG, []);
+
+	dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+	rtvar = eeg_getepochevent( EEG,{'S196'},[],'latency');
+
+
+	for ii=1:length(dat(1,:))
+	 dat(:,ii)=dat(:,ii)-controlerp;
+	end
+
+	allrtvar2 = [rtvar,allrtvar2];
+	alldat2=[dat,alldat2];
+
+	rts{S} = allrtvar;
+	datas{S} = alldat;
+	rts2{S} = allrtvar2;
+	datas2{S} = alldat2;
+	allrtvar=[];alldat=[];allrtvar2=[];alldat2=[];
+end;
+
+pre = 100;		% time points before 0
+p6onset = 0;	% time points from 0 to P6 template onset
+p6length = 55;		% template length in data points
+
+wrts = rts2; weeg = datas2;
+
+for S = 1:nsub
+
+	rtmean(S) = nanmedian(wrts{S});
+
+	for X = 1:length(wrts{S})
+		if 1250 < wrts{S}(X)
+		wrts{S}(X) = NaN;
+	end;end;
+
+	for X = 1:length(wrts{S})
+		if 500 > wrts{S}(X)
+		wrts{S}(X) = NaN;
+	end;end;
+
+	data = weeg{S};rtvar = wrts{S};
+
+	[outdata,outvar] = erpimage(data,rtvar, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), '', 1, 1, 'filt',[0 6],'NoShow','on');
+	[q,w,e,r,t,erp] = erpimage(data,rtvar, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), '', 1, 1, 'filt',[0 6],'NoShow','on','align',inf,'erp','on');
+
+	dasyn{S} = outdata;
+	vasyn{S} = outvar;
+
+	% fliplr for sanity check
+	% everything that's still there when this line is not commented out is a false positive!
+%	vasyn{S} = randsample(outvar,length(outvar)); 
+
+	vasyn2{S} = outvar;
+
+
+	erps{S} = erp;
+
+end;
+
+
+eegdata=[];rtdata=[];
+for x = 1:nsub
+	eegdata=[eegdata,dasyn{x}];
+	rtdata=[rtdata,vasyn{x}];
+end;
+
+% figure;[outdata5,outrtvar5,outtrials5] = erpimage(eegdata, rtdata, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 6, 1 ,'erp',1,'avg_type','Gaussian','cbar','on','cbar_title','\muV');
+
+
+collects=[];means=[];vars=[]; corrvals=[];
+for S = 1:nsub;
+
+	erp = erps{S};
+	collect=[];corvall=[];
+	data = dasyn{S};
+	% the following step either nulls every data point 300 msec after the response
+	% or subtracts the mean response-locked ERP at that timepoint
+	% this might sound problematic, but 1. we still get a strong correlation without this step, 2. it’s used to null the ERP time-locked to the feedback, which in turn is perfectly time-locked to the response!! so I wouldn't feel comfortable without it
+	for L = 1:length(vasyn{S})
+%		data((vasyn{S}(L)/10)+pre+30:600,L) = 0;
+		data((vasyn2{S}(L)/10)+pre+40:end,L) = 		data((vasyn2{S}(L)/10)+pre+40:end,L)- 		erp((vasyn2{S}(L)/10)+pre+40:end).';
+	end;
+	datarm{S} = data;
+	
+% figure;[outdata5,outrtvar5,outtrials5] = erpimage(data, vasyn{S}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 2, 1 ,'erp',1,'avg_type','Gaussian','cbar','on','cbar_title','\muV');
+
+
+	datamean = mean(data(pre+p6onset:pre+p6onset+p6length,:),2);
+
+	for N = 1:100
+		trials=[];
+		for X = 1:length(vasyn{S})
+
+			out = xcorr(data(pre+p6onset:pre+p6onset+p6length,X),datamean);
+
+			[Y,I]=sort(out);
+
+			thepoint=I(end)-p6length;
+
+			trialpoint = data(pre+p6onset+thepoint:pre+p6onset+p6length+thepoint,X); 
+			trials = [trials,trialpoint];
+
+			datamean = mean(trials,2);
+
+		end;
+	end;
+
+	for X = 1:length(vasyn{S})
+
+		out = xcorr(data(pre+p6onset:pre+p6onset+p6length,X),mean(trials,2));
+
+		[Y,I]=sort(out);
+
+		thepoint=I(end)-p6length;
+
+		collect = [collect,thepoint];
+
+	end;
+
+	means = [means,mean(trials,2)];
+	vars = [vars,collect];
+	collects{S} = collect;
+
+end;
+
+
+vars=[];lats=[];dats=[];
+for S = 1:nsub
+
+	dat =dasyn{S};
+	varf = vasyn{S};
+	lat = (collects{S}+p6onset)*10;
+	rtmean = nanmedian(vasyn{S});
+
+	dats=[dats,dat];
+	vars=[vars,varf];
+
+	lats=[lats,lat];
+
+end;
+
+
+a = [(lats).'; (lats).'-vars.'];
+b = [ones(length(vars),1); ones(length(vars),1)*2];
+[p,stats]=vartestn(a, b,'on','robust');
+
+
+% calculate individual correlation coefficients using the robust corr toolbox 
+for S = 1:nsub
+
+%	sbplot(4,5,S);
+	x = vasyn{S};
+	y = (collects{S}+p6onset)*10;
+
+	[r,t,h,outid] = skipped_correlation(x,y,0);
+	rvals(S) = squeeze(r.Pearson);
+
+end;
+rvals
+
+z=0.5*log((1+rvals)./(1-rvals));
+
+%calculate CI
+[H,P,CI95]=ttest(z,0,1-.95);
+%[H,P,CI68]=ttest(z,0,1-.68);
+
+
+zci =CI95;
+zmean = mean(z);
+
+% inverse fisher
+r=(exp(2*zci)-1)./(exp(2*zci)+1)
+r=(exp(2*zmean)-1)./(exp(2*zmean)+1)
+
+
+
+
+r
+
+
+ 
+
+
+
+
+% calculate robust linear regression, no constant, give the slope + standard error and plot them
+
+figure;
+for S = 1:nsub
+	x = vasyn{S};
+	y = (collects{S}+p6onset)*10;
+
+	sbplot(4,5,S);
+
+%	mdlr = LinearModel.fit(x,y,'linear','RobustOpts','on');
+%	mdlr = LinearModel.fit(x,y,'linear','RobustOpts','on','intercept',false,'VarNames',{'RT','P6'})
+%	plotResiduals(mdlr,'probability')
+
+%	[estimateo(S),stats] = robustfit(x,y,'ols',[],'off');
+	[estimatel(S),stats] = robustfit(x,y,'logistic',[],'off');
+
+	plot(x, y, 'x');	hold on;
+	plot(x,estimatel(S)*x,'g','LineWidth',2); hold on;
+	plot(x,(estimatel(S)*x)+stats.se,'r','LineWidth',1); hold on;
+	plot(x,(estimatel(S)*x)-stats.se,'r','LineWidth',1); hold on;
+	se(S) = stats.se;
+	xlim([0 1500]);ylim([0 1500]);
+
+%% 	plot	slope and its standard error
+%	hold on; plot(S,estimate(S),'x');	hold on; plot(S,estimate(S)+stats.se,'^'); 	hold on; plot(S,estimate(S)-stats.se,'v');
+
+end;
+
+estimatel
+mean(estimatel)
+mean(se(S))
+
+% ylim([0 1]);xlim([0 21]);
+
+
+
+
+
+% calculate individual correlation coefficients using the robust corr toolbox 
+for S = 1:nsub
+
+%	sbplot(4,5,S);
+	x = vasyn{S};
+	y = (collects{S}+p6onset)*10;
+
+	[r,t,h,outid] = skipped_correlation(x,y,0);
+	rvals(S) = squeeze(r.Pearson);
+
+end;
+rvals
+mean(rvals)
+
+
+
+
+figure;
+for S = 1:nsub
+	sbplot(4,5,S);
+	[outdata5,outrtvar5,outtrials5] = erpimage(datarm{S}, vasyn{S}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 2, 1 ,'avg_type','Gaussian','cbar','on','cbar_title','\muV','align',inf,'erp','on');
+end
+
+
+
+figure;
+for S = 1:nsub
+	sbplot(4,5,S);
+	[outdata5,outrtvar5,outtrials5] = erpimage(dasyn{S}, vasyn{S}, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), 'PZ ERP sorted by reaction time', 2, 1 ,'avg_type','Gaussian','cbar','on','cbar_title','\muV','align',inf,'erp','on');
+end
+
+
+
+figure;
+for S = 1:nsub
+	x = vasyn{S};
+	y = (collects{S}+p6onset)*10;
+
+	sbplot(4,5,S);
+
+%	mdlr = LinearModel.fit(x,y,'linear','RobustOpts','on');
+	mdlr = LinearModel.fit(x,y,'linear','RobustOpts','on','intercept',false,'VarNames',{'RT','P6'})
+	plotResiduals(mdlr,'probability')
+
+end;
+
+% fisher transform
+%
+
