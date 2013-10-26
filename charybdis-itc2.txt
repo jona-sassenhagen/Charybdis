@@ -47,12 +47,40 @@ end
 
 allrtvar = [rtvar,allrtvar];
 alldat=[dat,alldat];
-datas{S} = dat;
-rts{S} = rtvar;
+
+	EEG = pop_loadset('filename',filename,'filepath',filepath);
+	%EEG = pop_resample( EEG, 100);
+	EEG = pop_subcomp(EEG,[EEG.clusters.saccade EEG.clusters.blink]);
+	EEG.icawinv = [];EEG.icasphere = [];EEG.icaweights = [];EEG.icachansind = [];
+
+	EEG = pop_reref( EEG, [31 33] );
+
+	EEG = pop_epoch( EEG, buttonpress, [-9 10], 'epochinfo', 'yes');
+	EEG = pop_epoch( EEG, sem, [-4 5], 'epochinfo', 'yes');
+
+%	EEG = pop_rmbase( EEG, []);
+
+	dat = squeeze(eeg_getdatact(EEG,'channel',channel));
+	rtvar = eeg_getepochevent( EEG,{'S196'},[],'latency');
+
+
+	for ii=1:length(dat(1,:))
+	 dat(:,ii)=dat(:,ii)-controlerp;
+	end
+
+	allrtvar2 = [rtvar,allrtvar2];
+	alldat2=[dat,alldat2];
+
+	rts{S} = allrtvar;
+	datas{S} = alldat;
+	rts2{S} = allrtvar2;
+	datas2{S} = alldat2;
+	allrtvar=[];alldat=[];allrtvar2=[];alldat2=[];
 
 end;
 
 
+%datas=datas2;rts=rts2;
 
 %figure;
 %sbplot(2,1,1)
