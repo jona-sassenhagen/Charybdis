@@ -124,6 +124,8 @@ set(gca,'YTickLabel',{'Onset','RT'})
 
 
 
+
+
 % repeat for semantic violation trials; note gaussian smoothing factor is only 15 because there are less trials in this condition
 [outdata7,outvar7,outtrials7] = erpimage(D, allvar3, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), '', 15, 1 ,'avg_type','Gaussian','NoShow','on');
 [outdata8,outvar8,outtrials8] = erpimage(D, allvar3, linspace(EEG.xmin*1000, EEG.xmax*1000, EEG.pnts), '', 15, 1 ,'avg_type','Gaussian','NoShow','on','align',inf);
